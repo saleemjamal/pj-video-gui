@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
       resolution,
       prompt,
       script,
+      theme, // Video theme for script generation and styling
       voiceProvider,
       voice,
       // Logo parameters
@@ -22,6 +23,8 @@ export async function POST(request: NextRequest) {
       enableLogoOutro,
       introDuration,
       outroDuration,
+      // Text overlay parameters
+      textOverlays,
     } = body;
 
     // Validation
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
       resolution: resolution || '1080p',
       prompt,
       script,
+      theme: theme || 'informational', // Default to informational theme
       voiceProvider: (voiceProvider || 'openai') as VoiceoverProviderType,
       voice: voice || 'nova',
       // Logo parameters
@@ -49,6 +53,8 @@ export async function POST(request: NextRequest) {
       enableLogoOutro: enableLogoOutro || false,
       introDuration: introDuration || 0,
       outroDuration: outroDuration || 0,
+      // Text overlay parameters
+      textOverlays: textOverlays || [],
     });
 
     // Execute pipeline

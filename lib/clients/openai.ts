@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import type { VideoTheme } from '../themes/types';
+import { getThemeConfig, DEFAULT_THEME } from '../themes/config';
 
 // Lazy initialize OpenAI client
 let openaiInstance: OpenAI | null = null;
@@ -91,7 +93,8 @@ Output ONLY the prompt text, no explanations.`;
 // Generate voiceover script
 export async function generateScript(
   productDescription: string,
-  duration: number
+  duration: number,
+  theme: VideoTheme = DEFAULT_THEME
 ): Promise<string> {
   // Strict word limits based on TTS rate of 150 words/min (2.5 words/sec)
   // Limits are HARD MAXIMUMS to prevent audio cutoff
@@ -104,22 +107,34 @@ export async function generateScript(
     12: '30 words maximum',
   };
 
+  // Get theme configuration
+  const themeConfig = getThemeConfig(theme);
+
   const scriptPromptTemplate = `Create a voiceover script for a ${duration}s product video.
 
 Product: ${productDescription}
 Brand: Poppat Jamals - Premium homeware retailer
-Tone: Premium, warm, trustworthy
-Keywords: quality, curation, value, classy, elegance
+
+VIDEO THEME: ${themeConfig.name}
+Theme Tone: ${themeConfig.scriptTone}
+Theme Keywords: ${themeConfig.scriptKeywords.join(', ')}
+Theme Style: ${themeConfig.scriptStyle}
+
+Base Tone: Premium, warm, trustworthy
+Base Keywords: quality, curation, value, classy, elegance
 
 CRITICAL LENGTH REQUIREMENT: ${wordLimits[duration] || '15 words maximum'}
 ⚠️ IMPORTANT: If you exceed this word count, the audio will be CUT OFF mid-sentence. Stay UNDER the limit.
 
-Style:
+Style Guidelines:
 - Conversational yet elegant
+- Blend the theme tone with the premium brand voice
+- Use theme keywords naturally when relevant
 - Focus on emotional benefit, quality, and product appeal
 - Optional tagline format: "Poppat Jamals — [quality descriptor]"
 - Avoid excessive focus on brand history or age
 - Prioritize brevity - every word counts!
+- Make the theme clear but don't be heavy-handed
 
 Output ONLY the script text for voiceover, no explanations.`;
 

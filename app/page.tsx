@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import type { VideoTheme, TextOverlay } from '@/lib/themes/types';
+import { getAllThemes, getThemeConfig, DEFAULT_THEME } from '@/lib/themes/config';
 
 type VideoProviderType = 'veo3-fast' | 'hailuo2' | 'seedance-pro-fast';
 type GenerationState = 'idle' | 'generating' | 'complete' | 'error';
@@ -85,12 +87,17 @@ export default function Home() {
   const [generatingScript, setGeneratingScript] = useState(false);
 
   // Logo state
+  const [logoChoice, setLogoChoice] = useState<'pending' | 'yes' | 'no'>('pending'); // Track logo decision
   const [logo, setLogo] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [enableLogoIntro, setEnableLogoIntro] = useState(false);
   const [enableLogoOutro, setEnableLogoOutro] = useState(false);
   const [introDuration, setIntroDuration] = useState(2);
   const [outroDuration, setOutroDuration] = useState(2);
+
+  // Theme and text overlay state
+  const [theme, setTheme] = useState<VideoTheme>(DEFAULT_THEME);
+  const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
 
   // Calculate cost
   const estimatedCost = () => {
@@ -219,6 +226,7 @@ export default function Home() {
           resolution,
           prompt,
           script,
+          theme, // Video theme
           voiceProvider: 'openai',
           voice,
           // Logo parameters
@@ -227,6 +235,8 @@ export default function Home() {
           enableLogoOutro: enableLogoOutro && logo ? true : false,
           introDuration: enableLogoIntro ? introDuration : 0,
           outroDuration: enableLogoOutro ? outroDuration : 0,
+          // Text overlay parameters
+          textOverlays,
         }),
       });
 
@@ -245,7 +255,7 @@ export default function Home() {
   };
 
   const cost = estimatedCost();
-  const canGenerate = image && prompt && script && state === 'idle';
+  const canGenerate = image && prompt && script && logoChoice !== 'pending' && state === 'idle';
 
   return (
     <main className="min-h-screen bg-gray-50 py-8">
@@ -320,9 +330,65 @@ export default function Home() {
           )}
         </div>
 
+        {/* Theme Selection */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">2. Select Video Theme</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Choose a theme that influences the voiceover tone and provides text overlay presets
+          </p>
+
+          <select
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as VideoTheme)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+          >
+            {getAllThemes().map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label} - {t.description}
+              </option>
+            ))}
+          </select>
+
+          {/* Quick Preset Buttons */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Quick Text Overlay Presets
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {getThemeConfig(theme).presets.map((preset, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    const themeStyle = getThemeConfig(theme).textStyle;
+                    const newOverlay: TextOverlay = {
+                      text: preset.text,
+                      position: preset.position,
+                      startTime: preset.startTime,
+                      endTime: Math.min(preset.endTime, duration),
+                      fadeDuration: preset.fadeDuration || 0.5,
+                      textColor: themeStyle.textColor,
+                      fontSize: themeStyle.fontSize,
+                      fontWeight: themeStyle.fontWeight,
+                      backgroundColor: themeStyle.backgroundColor,
+                      backgroundOpacity: themeStyle.backgroundOpacity,
+                    };
+                    setTextOverlays([...textOverlays, newOverlay]);
+                  }}
+                  className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 text-sm font-medium"
+                >
+                  + {preset.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Click to add preset overlays to your video (customizable below)
+            </p>
+          </div>
+        </div>
+
         {/* Video Configuration */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">2. Video Configuration</h2>
+          <h2 className="text-lg font-semibold mb-4">3. Video Configuration</h2>
 
           {/* Model Selection */}
           <div className="mb-4">
@@ -436,7 +502,7 @@ export default function Home() {
         {/* Prompt Generation */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">3. Video Prompt</h2>
+            <h2 className="text-lg font-semibold">4. Video Prompt</h2>
             <button
               onClick={handleGeneratePrompt}
               disabled={!image || generatingPrompt}
@@ -457,7 +523,7 @@ export default function Home() {
         {/* Script Generation */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">4. Voiceover Script</h2>
+            <h2 className="text-lg font-semibold">5. Voiceover Script</h2>
             <button
               onClick={handleGenerateScript}
               disabled={generatingScript}
@@ -477,7 +543,7 @@ export default function Home() {
 
         {/* Voice Selection */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">5. Select Voice</h2>
+          <h2 className="text-lg font-semibold mb-4">6. Select Voice</h2>
           <select
             value={voice}
             onChange={(e) => setVoice(e.target.value)}
@@ -493,47 +559,100 @@ export default function Home() {
 
         {/* Logo Intro/Outro (Optional) */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">6. Brand Logo (Optional)</h2>
+          <h2 className="text-lg font-semibold mb-4">6. Brand Logo</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Do you want to add a logo intro/outro to your video?
+          </p>
 
-          {/* Logo Upload */}
+          {/* Logo Choice */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Upload Logo</label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-              {!logo ? (
-                <div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    className="hidden"
-                    id="logo-upload"
-                  />
-                  <label
-                    htmlFor="logo-upload"
-                    className="cursor-pointer inline-flex items-center px-3 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700"
-                  >
-                    Choose Logo
-                  </label>
-                  <p className="text-gray-500 text-xs mt-2">PNG recommended for transparency</p>
-                </div>
-              ) : (
-                <div>
-                  <img src={logo} alt="Logo Preview" className="max-h-24 mx-auto rounded" />
-                  <button
-                    onClick={() => {
-                      setLogo(null);
-                      setLogoFile(null);
-                      setEnableLogoIntro(false);
-                      setEnableLogoOutro(false);
-                    }}
-                    className="mt-2 text-red-600 text-xs hover:underline"
-                  >
-                    Remove Logo
-                  </button>
-                </div>
-              )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setLogoChoice('yes');
+                }}
+                className={`flex-1 px-4 py-3 rounded-md border-2 text-sm font-medium transition-colors ${
+                  logoChoice === 'yes'
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                Add Logo
+              </button>
+              <button
+                onClick={() => {
+                  setLogoChoice('no');
+                  setLogo(null);
+                  setLogoFile(null);
+                  setEnableLogoIntro(false);
+                  setEnableLogoOutro(false);
+                }}
+                className={`flex-1 px-4 py-3 rounded-md border-2 text-sm font-medium transition-colors ${
+                  logoChoice === 'no'
+                    ? 'border-gray-600 bg-gray-50 text-gray-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                No Logo
+              </button>
             </div>
+            {logoChoice === 'pending' && (
+              <p className="text-xs text-orange-600 mt-2">
+                ⚠️ Please make a selection to continue
+              </p>
+            )}
           </div>
+
+          {/* Confirmation when "No Logo" is selected */}
+          {logoChoice === 'no' && (
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-3 mb-4">
+              <p className="text-sm text-gray-700">
+                ✓ Video will be generated without logo intro/outro
+              </p>
+            </div>
+          )}
+
+          {/* Logo Upload (only show if "Add Logo" selected) */}
+          {logoChoice === 'yes' && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Upload Logo</label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                {!logo ? (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                      id="logo-upload"
+                    />
+                    <label
+                      htmlFor="logo-upload"
+                      className="cursor-pointer inline-flex items-center px-3 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700"
+                    >
+                      Choose Logo
+                    </label>
+                    <p className="text-gray-500 text-xs mt-2">PNG recommended for transparency</p>
+                  </div>
+                ) : (
+                  <div>
+                    <img src={logo} alt="Logo Preview" className="max-h-24 mx-auto rounded" />
+                    <button
+                      onClick={() => {
+                        setLogo(null);
+                        setLogoFile(null);
+                        setEnableLogoIntro(false);
+                        setEnableLogoOutro(false);
+                      }}
+                      className="mt-2 text-red-600 text-xs hover:underline"
+                    >
+                      Remove Logo
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Logo Options (only show if logo uploaded) */}
           {logo && (
@@ -605,6 +724,224 @@ export default function Home() {
               )}
             </>
           )}
+        </div>
+
+        {/* Text Overlays Editor */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">7. Text Overlays (Optional)</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Add or customize text overlays on your video. Use quick presets from the theme section above, or add custom text.
+          </p>
+
+          {/* List of current overlays */}
+          {textOverlays.length > 0 ? (
+            <div className="space-y-3 mb-4">
+              {textOverlays.map((overlay, index) => (
+                <div key={index} className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={overlay.text}
+                        onChange={(e) => {
+                          const updated = [...textOverlays];
+                          updated[index].text = e.target.value;
+                          setTextOverlays(updated);
+                        }}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-medium text-gray-900 bg-white"
+                        placeholder="Overlay text"
+                      />
+                    </div>
+                    <button
+                      onClick={() => setTextOverlays(textOverlays.filter((_, i) => i !== index))}
+                      className="ml-2 text-red-600 hover:text-red-800 text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Position */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Position</label>
+                      <select
+                        value={overlay.position}
+                        onChange={(e) => {
+                          const updated = [...textOverlays];
+                          updated[index].position = e.target.value as TextOverlay['position'];
+                          setTextOverlays(updated);
+                        }}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
+                      >
+                        <option value="top-left">Top Left</option>
+                        <option value="top-center">Top Center</option>
+                        <option value="top-right">Top Right</option>
+                        <option value="center">Center</option>
+                        <option value="bottom-left">Bottom Left</option>
+                        <option value="bottom-center">Bottom Center</option>
+                        <option value="bottom-right">Bottom Right</option>
+                      </select>
+                    </div>
+
+                    {/* Timing */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Timing: {overlay.startTime}s - {overlay.endTime}s
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max={duration}
+                          step="0.5"
+                          value={overlay.startTime}
+                          onChange={(e) => {
+                            const updated = [...textOverlays];
+                            updated[index].startTime = parseFloat(e.target.value);
+                            setTextOverlays(updated);
+                          }}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
+                          placeholder="Start"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          max={duration}
+                          step="0.5"
+                          value={overlay.endTime}
+                          onChange={(e) => {
+                            const updated = [...textOverlays];
+                            updated[index].endTime = parseFloat(e.target.value);
+                            setTextOverlays(updated);
+                          }}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
+                          placeholder="End"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Styling Controls (Collapsible) */}
+                  <details className="mt-3">
+                    <summary className="text-xs font-medium text-gray-700 cursor-pointer hover:text-gray-900">
+                      Customize Styling
+                    </summary>
+                    <div className="mt-2 grid grid-cols-2 gap-3 pt-2 border-t border-gray-200">
+                      {/* Text Color */}
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Text Color</label>
+                        <input
+                          type="color"
+                          value={overlay.textColor || '#FFFFFF'}
+                          onChange={(e) => {
+                            const updated = [...textOverlays];
+                            updated[index].textColor = e.target.value;
+                            setTextOverlays(updated);
+                          }}
+                          className="w-full h-8 rounded border border-gray-300"
+                        />
+                      </div>
+
+                      {/* Font Size */}
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Size: {overlay.fontSize || 64}px
+                        </label>
+                        <input
+                          type="range"
+                          min="24"
+                          max="120"
+                          step="4"
+                          value={overlay.fontSize || 64}
+                          onChange={(e) => {
+                            const updated = [...textOverlays];
+                            updated[index].fontSize = parseInt(e.target.value);
+                            setTextOverlays(updated);
+                          }}
+                          className="w-full"
+                        />
+                      </div>
+
+                      {/* Background Color */}
+                      <div>
+                        <label className="flex items-center text-xs text-gray-600 mb-1">
+                          <input
+                            type="checkbox"
+                            checked={!!overlay.backgroundColor}
+                            onChange={(e) => {
+                              const updated = [...textOverlays];
+                              updated[index].backgroundColor = e.target.checked ? '#000000' : undefined;
+                              setTextOverlays(updated);
+                            }}
+                            className="mr-1"
+                          />
+                          Background
+                        </label>
+                        {overlay.backgroundColor && (
+                          <input
+                            type="color"
+                            value={overlay.backgroundColor}
+                            onChange={(e) => {
+                              const updated = [...textOverlays];
+                              updated[index].backgroundColor = e.target.value;
+                              setTextOverlays(updated);
+                            }}
+                            className="w-full h-8 rounded border border-gray-300"
+                          />
+                        )}
+                      </div>
+
+                      {/* Fade Duration */}
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Fade: {overlay.fadeDuration || 0.5}s
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={overlay.fadeDuration || 0.5}
+                          onChange={(e) => {
+                            const updated = [...textOverlays];
+                            updated[index].fadeDuration = parseFloat(e.target.value);
+                            setTextOverlays(updated);
+                          }}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 mb-4">No overlays added yet. Use preset buttons above or add custom text below.</p>
+          )}
+
+          {/* Add Custom Overlay Button */}
+          <button
+            onClick={() => {
+              const themeStyle = getThemeConfig(theme).textStyle;
+              setTextOverlays([
+                ...textOverlays,
+                {
+                  text: 'Custom Text',
+                  position: 'top-center',
+                  startTime: 0,
+                  endTime: Math.min(3, duration),
+                  fadeDuration: 0.5,
+                  textColor: themeStyle.textColor,
+                  fontSize: themeStyle.fontSize,
+                  backgroundColor: themeStyle.backgroundColor,
+                  backgroundOpacity: themeStyle.backgroundOpacity,
+                },
+              ]);
+            }}
+            className="w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-gray-400 hover:text-gray-800 text-sm"
+          >
+            + Add Custom Text Overlay
+          </button>
         </div>
 
         {/* Generate Button */}

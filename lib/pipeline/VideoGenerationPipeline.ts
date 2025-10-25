@@ -2,7 +2,9 @@ import { getVideoProvider } from '../video/factory';
 import { getVoiceoverProvider } from '../voiceover/factory';
 import { generateVideoPrompt, generateScript } from '../clients/openai';
 import { mergeVideoAudio } from '../clients/ffmpeg';
-import { createLogoClip, concatenateVideos, getVideoDimensions } from '../clients/ffmpeg-direct';
+import { createLogoClip, concatenateVideos, getVideoDimensions, addTextOverlays } from '../clients/ffmpeg-direct';
+import type { VideoTheme, TextOverlay } from '../themes/types';
+import { DEFAULT_THEME } from '../themes/config';
 import {
   createOutputFolder,
   downloadVideo,
@@ -30,6 +32,9 @@ export interface PipelineConfig {
   prompt?: string; // If not provided, will be generated
   script?: string; // If not provided, will be generated
 
+  // Theme (affects script tone and provides styling presets)
+  theme?: VideoTheme; // Default: 'informational'
+
   // Voiceover
   voiceProvider: VoiceoverProviderType;
   voice: string;
@@ -40,6 +45,9 @@ export interface PipelineConfig {
   enableLogoOutro?: boolean;
   introDuration?: number;
   outroDuration?: number;
+
+  // Text Overlays (optional)
+  textOverlays?: TextOverlay[];
 
   // Callbacks
   onStateChange?: (state: GenerationState) => void;
@@ -120,7 +128,8 @@ export class VideoGenerationPipeline {
         this.updateState('generating_script');
         this.startTimer('script');
 
-        script = await generateScript('Product from image', this.config.duration);
+        const theme = this.config.theme || DEFAULT_THEME;
+        script = await generateScript('Product from image', this.config.duration, theme);
 
         this.endTimer('script');
       }
@@ -251,7 +260,7 @@ export class VideoGenerationPipeline {
       this.updateState('merging_audio');
       this.startTimer('merge');
 
-      const finalVideoFilename = `video_final_${timestamp}.mp4`;
+      let finalVideoFilename = `video_final_${timestamp}.mp4`;
       finalVideoPath = path.join(outputFolder, finalVideoFilename);
 
       await mergeVideoAudio({
@@ -261,6 +270,42 @@ export class VideoGenerationPipeline {
       });
 
       this.endTimer('merge');
+
+      // Stage 9.5: Add text overlays if enabled (FAIL-SAFE: continues with merged video if overlays fail)
+      let textOverlayError: string | undefined;
+
+      if (this.config.textOverlays && this.config.textOverlays.length > 0) {
+        try {
+          this.updateState('saving_files');
+          this.startTimer('text_overlays');
+
+          console.log(`Starting text overlay processing (${this.config.textOverlays.length} overlays)...`);
+
+          // Apply text overlays to the merged video
+          const textOverlayFilename = `video_with_overlays_${timestamp}.mp4`;
+          const textOverlayPath = path.join(outputFolder, textOverlayFilename);
+
+          await addTextOverlays({
+            videoPath: finalVideoPath,
+            outputPath: textOverlayPath,
+            overlays: this.config.textOverlays,
+          });
+
+          // Update finalVideoPath and filename to the version with overlays
+          finalVideoPath = textOverlayPath;
+          finalVideoFilename = textOverlayFilename;
+          console.log('Text overlays applied successfully!');
+
+          this.endTimer('text_overlays');
+        } catch (textErr) {
+          // FAIL-SAFE: Log error but continue with video without overlays
+          const errorMsg = textErr instanceof Error ? textErr.message : 'Unknown text overlay error';
+          console.error('⚠️  Text overlay processing failed, continuing with video without overlays:', errorMsg);
+          textOverlayError = errorMsg;
+          // finalVideoPath stays as the merged video without overlays
+          this.timings.text_overlays = 0; // Reset timing
+        }
+      }
 
       // Stage 10: Calculate costs
       const costs = {
@@ -295,6 +340,7 @@ export class VideoGenerationPipeline {
           script,
           voice: this.config.voice,
           voice_provider: this.config.voiceProvider,
+          theme: this.config.theme || DEFAULT_THEME,
         },
         costs,
         timings: {
@@ -305,6 +351,7 @@ export class VideoGenerationPipeline {
           voiceover: this.timings.voiceover || 0,
           logo: this.timings.logo || 0,
           merge: this.timings.merge || 0,
+          text_overlays: this.timings.text_overlays || 0,
           total: totalTime,
         },
         files: {
@@ -319,6 +366,12 @@ export class VideoGenerationPipeline {
           intro_duration: this.config.introDuration || 0,
           outro_duration: this.config.outroDuration || 0,
           error: logoError, // Will be set if logo processing failed
+        } : undefined,
+        text_overlays: this.config.textOverlays && this.config.textOverlays.length > 0 ? {
+          enabled: true,
+          count: this.config.textOverlays.length,
+          overlays: this.config.textOverlays,
+          error: textOverlayError, // Will be set if text overlay processing failed
         } : undefined,
       };
 

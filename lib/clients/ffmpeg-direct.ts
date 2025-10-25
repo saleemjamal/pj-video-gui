@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import path from 'path';
 import fs from 'fs-extra';
+import type { TextOverlay } from '../themes/types';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +23,12 @@ export interface LogoClipOptions {
 export interface ConcatenateOptions {
   videoPaths: string[];
   outputPath: string;
+}
+
+export interface AddTextOverlaysOptions {
+  videoPath: string;
+  outputPath: string;
+  overlays: TextOverlay[];
 }
 
 /**
@@ -149,5 +156,148 @@ export async function getVideoDimensions(videoPath: string): Promise<{ width: nu
   } catch (error) {
     console.error('Error getting video dimensions:', error);
     throw new Error(`Failed to get video dimensions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Add text overlays to a video with custom styling and timing
+ */
+export async function addTextOverlays(options: AddTextOverlaysOptions): Promise<string> {
+  const { videoPath, outputPath, overlays } = options;
+
+  if (overlays.length === 0) {
+    // No overlays, just copy the video
+    await fs.copyFile(videoPath, outputPath);
+    return outputPath;
+  }
+
+  console.log(`Adding ${overlays.length} text overlay(s) to video`);
+
+  // Helper function to escape text for FFmpeg
+  const escapeText = (text: string): string => {
+    return text
+      .replace(/\\/g, '\\\\')  // Escape backslashes
+      .replace(/:/g, '\\:')     // Escape colons
+      .replace(/'/g, "\\'");    // Escape single quotes
+  };
+
+  // Helper function to get position expression
+  const getPositionExpression = (position: TextOverlay['position']): { x: string; y: string } => {
+    const margin = 50; // Margin from edges in pixels
+
+    switch (position) {
+      case 'top-left':
+        return { x: `${margin}`, y: `${margin}` };
+      case 'top-center':
+        return { x: '(w-text_w)/2', y: `${margin}` };
+      case 'top-right':
+        return { x: `w-text_w-${margin}`, y: `${margin}` };
+      case 'center':
+        return { x: '(w-text_w)/2', y: '(h-text_h)/2' };
+      case 'bottom-left':
+        return { x: `${margin}`, y: `h-text_h-${margin}` };
+      case 'bottom-center':
+        return { x: '(w-text_w)/2', y: `h-text_h-${margin}` };
+      case 'bottom-right':
+        return { x: `w-text_w-${margin}`, y: `h-text_h-${margin}` };
+      default:
+        return { x: '(w-text_w)/2', y: '(h-text_h)/2' };
+    }
+  };
+
+  // Helper function to convert hex color to FFmpeg color format
+  const hexToFFmpegColor = (hexColor: string, opacity: number = 1.0): string => {
+    // Remove # if present
+    const hex = hexColor.replace('#', '');
+    // FFmpeg uses hex colors directly, opacity via @ suffix
+    return `0x${hex}@${opacity}`;
+  };
+
+  // Build drawtext filters for each overlay
+  const drawtextFilters = overlays.map((overlay, index) => {
+    const {
+      text,
+      position,
+      startTime,
+      endTime,
+      fadeDuration = 0.5,
+      textColor = '#FFFFFF',
+      fontSize = 64,
+      fontWeight = 'bold',
+      backgroundColor,
+      backgroundOpacity = 0.7,
+    } = overlay;
+
+    const escapedText = escapeText(text);
+    const { x, y } = getPositionExpression(position);
+
+    // Build drawtext filter parts
+    const parts: string[] = [
+      `text='${escapedText}'`,
+      `fontfile=/Windows/Fonts/arialbd.ttf`, // Arial Bold on Windows
+      `fontsize=${fontSize}`,
+      `fontcolor=${hexToFFmpegColor(textColor, 1.0)}`,
+      `x=${x}`,
+      `y=${y}`,
+    ];
+
+    // Add background box if specified
+    if (backgroundColor) {
+      parts.push('box=1');
+      parts.push(`boxcolor=${hexToFFmpegColor(backgroundColor, backgroundOpacity)}`);
+      parts.push('boxborderw=10'); // Padding around text
+    }
+
+    // Add fade in/out effects using alpha expression
+    const fadeIn = fadeDuration;
+    const fadeOut = fadeDuration;
+    const alphaParts: string[] = [];
+
+    // Fade in at start
+    if (fadeIn > 0) {
+      alphaParts.push(`if(lt(t-${startTime}\\,${fadeIn})\\,(t-${startTime})/${fadeIn}\\,1)`);
+    }
+
+    // Fade out at end
+    if (fadeOut > 0 && endTime > startTime + fadeOut) {
+      const fadeStartTime = endTime - fadeOut;
+      alphaParts.push(`if(gt(t\\,${fadeStartTime})\\,(${endTime}-t)/${fadeOut}\\,1)`);
+    }
+
+    // Apply alpha expression if we have fades
+    if (alphaParts.length > 0) {
+      const alphaExpr = alphaParts.length === 2
+        ? `min(${alphaParts[0]}\\,${alphaParts[1]})`
+        : alphaParts[0];
+      parts.push(`alpha='${alphaExpr}'`);
+    }
+
+    // Enable only during specified time range
+    parts.push(`enable='between(t\\,${startTime}\\,${endTime})'`);
+
+    return `drawtext=${parts.join(':')}`;
+  });
+
+  // Combine all drawtext filters
+  const filterComplex = drawtextFilters.join(',');
+
+  const args = [
+    '-i', videoPath,
+    '-vf', filterComplex,
+    '-c:v', 'libx264',
+    '-c:a', 'copy', // Copy audio without re-encoding
+    '-pix_fmt', 'yuv420p',
+    '-y',
+    outputPath
+  ];
+
+  try {
+    const { stdout, stderr } = await execFileAsync(ffmpegPath, args);
+    console.log('Text overlays added successfully');
+    if (stderr) console.log('FFmpeg output:', stderr);
+    return outputPath;
+  } catch (error) {
+    console.error('Error adding text overlays:', error);
+    throw new Error(`Failed to add text overlays: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
