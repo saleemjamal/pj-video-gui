@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Projects/pj-video-generator/**)",
+      "WebFetch(domain:replicate.com)",
+      "Bash(npm init -y)",
+      "Bash(npm run dev:*)",
+      "WebSearch"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
