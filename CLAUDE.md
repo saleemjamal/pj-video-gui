@@ -2,14 +2,15 @@
 
 ## Overview
 
-This is a Next.js 14 web application that generates social media product videos using AI. It orchestrates multiple AI services (Google Veo 3, Hailuo 2, Seedance Pro, OpenAI GPT-4o Vision, OpenAI TTS) through a provider abstraction pattern to create polished videos with voiceovers from a single product image.
+This is a Next.js 14 web application that generates social media product videos using AI. It orchestrates multiple AI services (Google Veo 3, Hailuo 2, Seedance Pro, OpenAI GPT-4o Vision, OpenAI TTS, ElevenLabs TTS) through a provider abstraction pattern to create polished videos with voiceovers from a single product image.
 
 **Key Technologies:**
 - Next.js 14 (App Router)
 - TypeScript
-- Tailwind CSS
+- Tailwind CSS (with Inter font)
 - Replicate API (video generation)
 - OpenAI API (vision analysis, TTS)
+- ElevenLabs API (premium TTS with Indian English voices)
 - FFmpeg (video/audio processing)
 
 ## Quick Start
@@ -44,12 +45,15 @@ REPLICATE_API_TOKEN=your_replicate_token
 # OpenAI API (for vision analysis and TTS)
 OPENAI_API_KEY=your_openai_key
 
+# ElevenLabs API (for premium TTS with Indian English voices)
+ELEVENLABS_API_KEY=your_elevenlabs_key
+
 # Optional: Custom output path
 OUTPUT_PATH=/path/to/output
 # Default: ~/Desktop/PJ-Social-Content
 
-# Optional: Default voice provider
-DEFAULT_VOICE_PROVIDER=openai
+# Optional: Default voice provider (openai or elevenlabs)
+DEFAULT_VOICE_PROVIDER=elevenlabs
 ```
 
 ## Architecture
@@ -79,7 +83,8 @@ The codebase uses a factory pattern to support multiple AI providers:
 **Voiceover Providers** (`lib/voiceover/`):
 - `VoiceoverProvider` interface defines the contract
 - `getVoiceoverProvider(type)` factory creates instances
-- Providers: OpenAI TTS (active), ElevenLabs (stub for Phase 2)
+- Providers: OpenAI TTS, ElevenLabs TTS (with Indian English voices)
+- Default: ElevenLabs with Preethi voice (Indian English female)
 
 ### Critical Implementation Details
 
@@ -233,6 +238,29 @@ The AI prompt includes a CRITICAL warning about cutoff (line 114).
 
 **⚠️ IMPORTANT:** These limits are intentionally conservative. DO NOT increase without testing.
 
+## ElevenLabs Voice Options
+
+**Available Voices:**
+
+**Indian English Voices:**
+- **Preethi** (Female) - Warm, professional tone - `flq6f7yk4E4fJM5XTYuZ`
+- **Prabhat** (Male) - Clear, authoritative tone - `IKne3meq5aSn9XLyUdCD`
+
+**International Premium Voices:**
+- **Bella** (Female) - Soft, friendly tone - `EXAVITQu4vr4xnSDxMaL`
+- **Rachel** (Female) - Warm, engaging tone - `nPczCjzI2devNBz1zQrb`
+- **Adam** (Male) - Deep, professional tone - `21m00Tcm4TlvDq8ikWAM`
+- **Antoni** (Male) - Clear, articulate tone - `ErXwobaYiN019PkySvjV`
+
+**Configuration:**
+- Model: `eleven_multilingual_v2` (best quality)
+- Stability: 0.5
+- Similarity Boost: 0.75
+- Speaker Boost: Enabled
+- Pricing: ~$0.30 per 1,000 characters
+
+**Implementation:** See `lib/voiceover/providers/elevenlabs.ts` for full API integration.
+
 ## Product Identification
 
 **Challenge:** AI vision may misidentify products (e.g., oil mister → spray bottle).
@@ -273,7 +301,7 @@ lib/
     ├── types.ts            # Interface definitions
     └── providers/
         ├── openai-tts.ts
-        └── elevenlabs.ts   # Stub for Phase 2
+        └── elevenlabs.ts   # Indian English voices (Preethi, Prabhat)
 
 app/
 ├── page.tsx           # Main UI component
@@ -330,6 +358,44 @@ PJ-Social-Content/
 2. **Shorter durations:** 4s videos cost less than 10s
 3. **Lower resolutions:** 720p cheaper than 1080p
 4. **Batch processing:** Use consistent settings across multiple products
+
+## Known Issues
+
+**Current issues being investigated (see `todo.md` for details):**
+
+### 1. Logo Outro + Voice Sync Issues
+- **Logo intro:** Working correctly ✅
+- **Logo outro:** Not appearing at end of video ⚠️
+- **Voice sync:** Audio starts immediately instead of waiting for 2s intro duration ⚠️
+- **Expected behavior:** Voice should start AFTER intro completes
+
+### 2. Product Size Morphing
+- Some videos distort product dimensions
+- Products appear smaller or rounder than actual size
+- Likely aspect ratio handling issue
+- **Potential solutions:**
+  - Preserve aspect ratio during generation
+  - Add letterboxing/pillarboxing instead of stretching
+  - Use "pad" or "contain" fit modes
+  - Review Replicate API video generation parameters
+
+**Resolved:**
+- ✅ Text overlays - Working correctly
+
+## UI Design
+
+**Current Design System:**
+- **Typography:** Inter font (Google Fonts)
+- **Color Scheme:** Indigo primary (indigo-600, indigo-700)
+- **Style:** Modern & Minimal aesthetic
+- **Background:** Subtle gradients (slate-50 to white)
+- **Components:** Rounded corners (rounded-xl), shadow-md borders
+- **Buttons:** Gradient backgrounds with hover effects
+- **Focus States:** Indigo ring-2 for accessibility
+
+**Logo Defaults:**
+- Logo intro/outro automatically enabled when logo uploaded
+- Default duration: 2 seconds each (adjustable to 1s or none)
 
 ## Common Pitfalls
 
@@ -428,13 +494,22 @@ PJ-Social-Content/
 5. **Logo is optional:** Skip it during development to speed up testing
 6. **Port conflicts:** Multiple dev servers may be running (3000, 3001, 3002) - kill zombie processes if needed
 
-## Future Enhancements (Phase 2)
+## Future Enhancements
 
-- ElevenLabs voiceover provider integration (stub exists at `lib/voiceover/providers/elevenlabs.ts`)
+**Completed:**
+- ✅ ElevenLabs voiceover provider integration
+- ✅ Text overlays rendering
+
+**To Fix:**
+- Fix logo outro and voice sync timing
+- Fix product aspect ratio morphing
+
+**Future Features:**
 - Additional video models as they become available on Replicate
 - Batch processing UI for multiple products
 - Video preview before final generation
 - Custom brand voice fine-tuning
+- Additional ElevenLabs voices (more regional variants)
 
 ## Debugging
 
@@ -461,6 +536,16 @@ For issues or questions:
 
 ---
 
-**Last Updated:** January 2025
-**Version:** 1.0
+**Last Updated:** October 2025
+**Version:** 1.1
 **License:** Proprietary - Poppat Jamals
+
+## Recent Updates
+
+**v1.1 - October 2025:**
+- ✅ ElevenLabs TTS integration with Indian English voices (Preethi, Prabhat)
+- ✅ UI redesign: Modern & Minimal style with Inter font
+- ✅ Color scheme update: Indigo primary colors
+- ✅ Logo intro/outro auto-enable on upload
+- ✅ Text overlays working correctly
+- ⚠️ Known issues: Logo outro, voice sync timing, aspect ratio morphing

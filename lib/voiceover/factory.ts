@@ -18,7 +18,7 @@ export function getVoiceoverProvider(type: VoiceoverProviderType): VoiceoverProv
 export function getAllVoiceoverProviders(): VoiceoverProvider[] {
   return [
     new OpenAITTSProvider(),
-    // ElevenLabsProvider will be enabled in Phase 2
+    new ElevenLabsProvider(),
   ];
 }
 

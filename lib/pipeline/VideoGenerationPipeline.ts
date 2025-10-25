@@ -1,6 +1,6 @@
 import { getVideoProvider } from '../video/factory';
 import { getVoiceoverProvider } from '../voiceover/factory';
-import { generateVideoPrompt, generateScript } from '../clients/openai';
+import { generateVideoPrompt, generateScript, identifyProduct } from '../clients/openai';
 import { mergeVideoAudio } from '../clients/ffmpeg';
 import { createLogoClip, concatenateVideos, getVideoDimensions, addTextOverlays } from '../clients/ffmpeg-direct';
 import type { VideoTheme, TextOverlay } from '../themes/types';
@@ -122,19 +122,31 @@ export class VideoGenerationPipeline {
         this.endTimer('vision');
       }
 
-      // Stage 4: Generate script if not provided
+      // Stage 4: Identify product from image (for script generation)
+      let productDescription = 'Product from image';
+      if (!this.config.script) {
+        this.updateState('analyzing_image');
+        this.startTimer('product_identification');
+
+        productDescription = await identifyProduct(this.config.image);
+        console.log('Identified product:', productDescription);
+
+        this.endTimer('product_identification');
+      }
+
+      // Stage 5: Generate script if not provided
       let script = this.config.script;
       if (!script) {
         this.updateState('generating_script');
         this.startTimer('script');
 
         const theme = this.config.theme || DEFAULT_THEME;
-        script = await generateScript('Product from image', this.config.duration, theme);
+        script = await generateScript(productDescription, this.config.duration, theme);
 
         this.endTimer('script');
       }
 
-      // Stage 5: Generate video
+      // Stage 6: Generate video
       this.updateState('generating_video');
       this.startTimer('video');
       const videoUrl = await videoProvider.generateVideo({
@@ -148,7 +160,7 @@ export class VideoGenerationPipeline {
 
       this.endTimer('video');
 
-      // Stage 6: Download video
+      // Stage 7: Download video
       const timestamp = Date.now();
       const originalVideoFilename = `video_original_${timestamp}.mp4`;
       const originalVideoPath = await downloadVideo(
@@ -157,7 +169,7 @@ export class VideoGenerationPipeline {
         originalVideoFilename
       );
 
-      // Stage 6.5: Add logo intro/outro if enabled (FAIL-SAFE: continues with original video if logo fails)
+      // Stage 7.5: Add logo intro/outro if enabled (FAIL-SAFE: continues with original video if logo fails)
       let videoForAudioMerge = originalVideoPath; // This will be used for audio merging later
       let logoError: string | undefined;
 
@@ -237,7 +249,7 @@ export class VideoGenerationPipeline {
         }
       }
 
-      // Stage 7: Generate voiceover
+      // Stage 8: Generate voiceover
       this.updateState('generating_voiceover');
       this.startTimer('voiceover');
 
@@ -248,7 +260,7 @@ export class VideoGenerationPipeline {
 
       this.endTimer('voiceover');
 
-      // Stage 8: Save voiceover
+      // Stage 9: Save voiceover
       const voiceoverFilename = `voiceover_${timestamp}.mp3`;
       const voiceoverPath = await saveAudioFile(
         audioBuffer,
@@ -256,7 +268,7 @@ export class VideoGenerationPipeline {
         voiceoverFilename
       );
 
-      // Stage 9: Merge video and audio
+      // Stage 10: Merge video and audio
       this.updateState('merging_audio');
       this.startTimer('merge');
 
@@ -271,7 +283,7 @@ export class VideoGenerationPipeline {
 
       this.endTimer('merge');
 
-      // Stage 9.5: Add text overlays if enabled (FAIL-SAFE: continues with merged video if overlays fail)
+      // Stage 10.5: Add text overlays if enabled (FAIL-SAFE: continues with merged video if overlays fail)
       let textOverlayError: string | undefined;
 
       if (this.config.textOverlays && this.config.textOverlays.length > 0) {
@@ -307,7 +319,7 @@ export class VideoGenerationPipeline {
         }
       }
 
-      // Stage 10: Calculate costs
+      // Stage 11: Calculate costs
       const costs = {
         vision_analysis: prompt === this.config.prompt ? 0 : 0.02,
         prompt_generation: prompt === this.config.prompt ? 0 : 0.005,
@@ -321,7 +333,7 @@ export class VideoGenerationPipeline {
       };
       costs.total = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
 
-      // Stage 11: Save metadata
+      // Stage 12: Save metadata
       this.updateState('saving_files');
 
       const totalTime = (Date.now() - totalStartTime) / 1000;
@@ -345,6 +357,7 @@ export class VideoGenerationPipeline {
         costs,
         timings: {
           vision: this.timings.vision || 0,
+          product_identification: this.timings.product_identification || 0,
           prompt: this.timings.prompt || 0,
           script: this.timings.script || 0,
           video: this.timings.video || 0,
@@ -377,7 +390,7 @@ export class VideoGenerationPipeline {
 
       await saveMetadata(outputFolder, metadata);
 
-      // Stage 12: Complete
+      // Stage 13: Complete
       this.updateState('complete');
 
       return {

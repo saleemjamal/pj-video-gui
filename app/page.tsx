@@ -36,13 +36,22 @@ const VIDEO_MODELS = {
   },
 };
 
-const VOICES = [
+const OPENAI_VOICES = [
   { id: 'nova', name: 'Nova', gender: 'Female', description: 'Bright, energetic' },
   { id: 'shimmer', name: 'Shimmer', gender: 'Female', description: 'Warm, friendly' },
   { id: 'alloy', name: 'Alloy', gender: 'Neutral', description: 'Balanced' },
   { id: 'echo', name: 'Echo', gender: 'Male', description: 'Clear, professional' },
   { id: 'onyx', name: 'Onyx', gender: 'Male', description: 'Deep, authoritative' },
   { id: 'fable', name: 'Fable', gender: 'Neutral', description: 'Expressive' },
+];
+
+const ELEVENLABS_VOICES = [
+  { id: 'preethi', name: 'Preethi', gender: 'Female', description: 'Indian English - Warm, professional' },
+  { id: 'prabhat', name: 'Prabhat', gender: 'Male', description: 'Indian English - Clear, authoritative' },
+  { id: 'bella', name: 'Bella', gender: 'Female', description: 'International - Soft, friendly' },
+  { id: 'rachel', name: 'Rachel', gender: 'Female', description: 'International - Warm, engaging' },
+  { id: 'adam', name: 'Adam', gender: 'Male', description: 'International - Deep, professional' },
+  { id: 'antoni', name: 'Antoni', gender: 'Male', description: 'International - Clear, articulate' },
 ];
 
 const ASPECT_RATIOS = [
@@ -79,7 +88,8 @@ export default function Home() {
   const [aspectRatio, setAspectRatio] = useState('9:16');
   const [prompt, setPrompt] = useState('');
   const [script, setScript] = useState('');
-  const [voice, setVoice] = useState('nova');
+  const [voiceProvider, setVoiceProvider] = useState<VoiceoverProviderType>('elevenlabs');
+  const [voice, setVoice] = useState('preethi'); // Default to Indian English voice
   const [state, setState] = useState<GenerationState>('idle');
   const [error, setError] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -127,12 +137,32 @@ export default function Home() {
     if (!file) return;
 
     setLogoFile(file);
+    // Enable intro and outro by default (2s each)
+    setEnableLogoIntro(true);
+    setEnableLogoOutro(true);
+
     const reader = new FileReader();
     reader.onload = (event) => {
       setLogo(event.target?.result as string);
     };
     reader.readAsDataURL(file);
   }, []);
+
+  // Get available voices based on selected provider
+  const getAvailableVoices = () => {
+    return voiceProvider === 'elevenlabs' ? ELEVENLABS_VOICES : OPENAI_VOICES;
+  };
+
+  // Handle voice provider change
+  const handleVoiceProviderChange = (provider: VoiceoverProviderType) => {
+    setVoiceProvider(provider);
+    // Set default voice for the new provider
+    if (provider === 'elevenlabs') {
+      setVoice('preethi'); // Indian English female
+    } else {
+      setVoice('nova'); // OpenAI default
+    }
+  };
 
   // Calculate total video duration with logo intro/outro
   const getTotalDuration = () => {
@@ -188,6 +218,7 @@ export default function Home() {
         body: JSON.stringify({
           productDescription: productDescription || detectedProduct || 'Product from image',
           duration,
+          theme,
         }),
       });
 
@@ -227,7 +258,7 @@ export default function Home() {
           prompt,
           script,
           theme, // Video theme
-          voiceProvider: 'openai',
+          voiceProvider,
           voice,
           // Logo parameters
           logo: logo || undefined,
@@ -258,17 +289,22 @@ export default function Home() {
   const canGenerate = image && prompt && script && logoChoice !== 'pending' && state === 'idle';
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 py-12">
       <div className="max-w-4xl mx-auto px-4">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">PJ Video Generator</h1>
-          <p className="text-gray-600 mt-1">Poppat Jamals Heritage Homeware</p>
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-2xl shadow-lg p-8 mb-8">
+          <h1 className="text-4xl font-bold text-white tracking-tight">PJ Video Generator</h1>
+          <p className="text-indigo-100 mt-2 text-lg">Poppat Jamals Heritage Homeware</p>
         </div>
 
         {/* Image Upload */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">1. Upload Product Image</h2>
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+              1
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Upload Product Image</h2>
+          </div>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
             {!image ? (
               <div>
@@ -281,7 +317,7 @@ export default function Home() {
                 />
                 <label
                   htmlFor="image-upload"
-                  className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="cursor-pointer inline-flex items-center px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 font-medium"
                 >
                   Choose Image
                 </label>
@@ -321,7 +357,7 @@ export default function Home() {
                 value={productDescription}
                 onChange={(e) => setProductDescription(e.target.value)}
                 placeholder="e.g., olive oil pourer, stainless steel tea kettle"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white placeholder-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white placeholder-gray-400"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Help the AI by specifying what this product is if it's misidentified
@@ -331,16 +367,21 @@ export default function Home() {
         </div>
 
         {/* Theme Selection */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">2. Select Video Theme</h2>
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+              2
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Select Video Theme</h2>
+          </div>
+          <p className="text-sm text-slate-600 mb-4">
             Choose a theme that influences the voiceover tone and provides text overlay presets
           </p>
 
           <select
             value={theme}
             onChange={(e) => setTheme(e.target.value as VideoTheme)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
           >
             {getAllThemes().map((t) => (
               <option key={t.value} value={t.value}>
@@ -387,8 +428,13 @@ export default function Home() {
         </div>
 
         {/* Video Configuration */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">3. Video Configuration</h2>
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+              3
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Video Configuration</h2>
+          </div>
 
           {/* Model Selection */}
           <div className="mb-4">
@@ -410,7 +456,7 @@ export default function Home() {
                   setAspectRatio(validAspectRatios.find(ar => ar.default)?.value || validAspectRatios[0].value);
                 }
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
             >
               {Object.entries(VIDEO_MODELS).map(([key, model]) => (
                 <option key={key} value={key}>{model.name}</option>
@@ -457,7 +503,7 @@ export default function Home() {
             <select
               value={resolution}
               onChange={(e) => setResolution(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
             >
               {getValidResolutions(videoModel, duration).map((res) => (
                 <option key={res} value={res}>{res}</option>
@@ -471,7 +517,7 @@ export default function Home() {
             <select
               value={aspectRatio}
               onChange={(e) => setAspectRatio(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
             >
               {getValidAspectRatios(videoModel).map((ratio) => (
                 <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
@@ -500,13 +546,18 @@ export default function Home() {
         </div>
 
         {/* Prompt Generation */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">4. Video Prompt</h2>
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+                4
+              </div>
+              <h2 className="text-xl font-semibold text-slate-800">Video Prompt</h2>
+            </div>
             <button
               onClick={handleGeneratePrompt}
               disabled={!image || generatingPrompt}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+              className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm hover:shadow-md transition-all disabled:bg-slate-300 disabled:cursor-not-allowed text-sm font-medium"
             >
               {generatingPrompt ? 'Generating...' : '🔄 Generate Prompt'}
             </button>
@@ -515,19 +566,24 @@ export default function Home() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="AI-generated video prompt will appear here..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-900 bg-white placeholder-gray-400"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-gray-900 bg-white placeholder-gray-400"
             rows={4}
           />
         </div>
 
         {/* Script Generation */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">5. Voiceover Script</h2>
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+                5
+              </div>
+              <h2 className="text-xl font-semibold text-slate-800">Voiceover Script</h2>
+            </div>
             <button
               onClick={handleGenerateScript}
               disabled={generatingScript}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+              className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm hover:shadow-md transition-all disabled:bg-slate-300 disabled:cursor-not-allowed text-sm font-medium"
             >
               {generatingScript ? 'Generating...' : '🔄 Generate Script'}
             </button>
@@ -536,31 +592,59 @@ export default function Home() {
             value={script}
             onChange={(e) => setScript(e.target.value)}
             placeholder="AI-generated voiceover script will appear here..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-900 bg-white placeholder-gray-400"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-gray-900 bg-white placeholder-gray-400"
             rows={3}
           />
         </div>
 
         {/* Voice Selection */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">6. Select Voice</h2>
-          <select
-            value={voice}
-            onChange={(e) => setVoice(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-          >
-            {VOICES.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} ({v.gender}) - {v.description}
-              </option>
-            ))}
-          </select>
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+              6
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Select Voice</h2>
+          </div>
+
+          {/* Voice Provider Selection */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Voice Provider</label>
+            <select
+              value={voiceProvider}
+              onChange={(e) => handleVoiceProviderChange(e.target.value as VoiceoverProviderType)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
+            >
+              <option value="elevenlabs">ElevenLabs (Premium, Indian English)</option>
+              <option value="openai">OpenAI (Standard)</option>
+            </select>
+          </div>
+
+          {/* Voice Selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Voice</label>
+            <select
+              value={voice}
+              onChange={(e) => setVoice(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 bg-white"
+            >
+              {getAvailableVoices().map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name} ({v.gender}) - {v.description}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Logo Intro/Outro (Optional) */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">6. Brand Logo</h2>
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+              7
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Brand Logo</h2>
+          </div>
+          <p className="text-sm text-slate-600 mb-4">
             Do you want to add a logo intro/outro to your video?
           </p>
 
@@ -570,6 +654,11 @@ export default function Home() {
               <button
                 onClick={() => {
                   setLogoChoice('yes');
+                  // Enable intro and outro by default (2s each) when choosing to add logo
+                  if (!logo) {
+                    setEnableLogoIntro(true);
+                    setEnableLogoOutro(true);
+                  }
                 }}
                 className={`flex-1 px-4 py-3 rounded-md border-2 text-sm font-medium transition-colors ${
                   logoChoice === 'yes'
@@ -727,9 +816,14 @@ export default function Home() {
         </div>
 
         {/* Text Overlays Editor */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">7. Text Overlays (Optional)</h2>
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+              8
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Text Overlays (Optional)</h2>
+          </div>
+          <p className="text-sm text-slate-600 mb-4">
             Add or customize text overlays on your video. Use quick presets from the theme section above, or add custom text.
           </p>
 
@@ -945,11 +1039,11 @@ export default function Home() {
         </div>
 
         {/* Generate Button */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-6 hover:shadow-lg transition-shadow">
           <button
             onClick={handleGenerateVideo}
             disabled={!canGenerate || state === 'generating'}
-            className="w-full px-6 py-4 bg-blue-600 text-white text-lg font-semibold rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="w-full px-8 py-5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-xl font-bold rounded-xl shadow-lg hover:from-indigo-700 hover:to-indigo-800 hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed disabled:transform-none"
           >
             {state === 'generating' ? '⏳ Generating Video (1-2 min)...' : '🎬 Generate Video'}
           </button>

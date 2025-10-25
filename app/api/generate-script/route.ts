@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateScript } from '@/lib/clients/openai';
+import type { VideoTheme } from '@/lib/themes/types';
+import { DEFAULT_THEME } from '@/lib/themes/config';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productDescription, duration } = body;
+    const { productDescription, duration, theme } = body;
 
     if (!duration) {
       return NextResponse.json(
@@ -13,9 +15,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('Generating script with:', { productDescription, duration, theme });
+
     const script = await generateScript(
       productDescription || 'Product from image',
-      duration
+      duration,
+      (theme as VideoTheme) || DEFAULT_THEME
     );
 
     return NextResponse.json({ script });

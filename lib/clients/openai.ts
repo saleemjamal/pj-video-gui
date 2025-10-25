@@ -110,6 +110,52 @@ export async function generateScript(
   // Get theme configuration
   const themeConfig = getThemeConfig(theme);
 
+  // Theme-specific templates and instructions
+  const themeTemplates: Record<VideoTheme, string> = {
+    'new-product': `
+TEMPLATE STRUCTURE (STRICT):
+- Opening: Start with "New Product Alert!" OR "Just Launched!" OR "Introducing [Product]!"
+- Middle: Brief product description (use abbreviations like "w/" for "with", "&" for "and")
+- Closing: Call-to-action ending with "at Poppat Jamals!" OR "Shop Poppat Jamals!"
+
+EXAMPLES:
+- "New Product Alert! Premium stainless steel colander w/ ergonomic handles. Get yours at Poppat Jamals!"
+- "Just Launched! Beautiful copper tea kettle for your kitchen. Shop now at Poppat Jamals!"
+- "Introducing premium olive oil mister! Easy cooking & healthy living. Buy it at Poppat Jamals!"`,
+
+    'promotional': `
+TEMPLATE STRUCTURE (STRICT):
+- Opening: Lead with discount/offer (e.g., "50% Off!", "Special Deal!", "Save Big!")
+- Middle: Brief product mention
+- Closing: Urgency + "at Poppat Jamals!" (e.g., "Limited time at Poppat Jamals!")
+
+EXAMPLES:
+- "50% Off! Premium cookware for your dream kitchen. Limited time at Poppat Jamals!"
+- "Flash Sale! Beautiful homeware essentials. Don't miss out - Shop Poppat Jamals!"`,
+
+    'informational': `
+TEMPLATE STRUCTURE:
+- Opening: Product feature or quality statement
+- Middle: Key benefit or use case
+- Closing: Brand tagline (optional)
+
+EXAMPLES:
+- "Handcrafted copper tea kettle. Perfect heat distribution for the perfect brew. Poppat Jamals - Quality Curated."
+- "Premium stainless steel construction. Designed for durability & elegance in your home."`,
+
+    'seasonal': `
+TEMPLATE STRUCTURE:
+- Opening: Seasonal reference (e.g., "This Holiday Season", "Perfect for [Season]")
+- Middle: Product + occasion fit
+- Closing: Gift/seasonal message + brand
+
+EXAMPLES:
+- "This Holiday Season, gift premium homeware from Poppat Jamals. Elegance they'll treasure."
+- "Perfect for festive cooking! Limited edition copper cookware. Available now at Poppat Jamals!"`,
+  };
+
+  const themeSpecificInstructions = themeTemplates[theme] || '';
+
   const scriptPromptTemplate = `Create a voiceover script for a ${duration}s product video.
 
 Product: ${productDescription}
@@ -120,6 +166,8 @@ Theme Tone: ${themeConfig.scriptTone}
 Theme Keywords: ${themeConfig.scriptKeywords.join(', ')}
 Theme Style: ${themeConfig.scriptStyle}
 
+${themeSpecificInstructions}
+
 Base Tone: Premium, warm, trustworthy
 Base Keywords: quality, curation, value, classy, elegance
 
@@ -129,12 +177,11 @@ CRITICAL LENGTH REQUIREMENT: ${wordLimits[duration] || '15 words maximum'}
 Style Guidelines:
 - Conversational yet elegant
 - Blend the theme tone with the premium brand voice
-- Use theme keywords naturally when relevant
+- ${theme === 'new-product' ? 'MUST follow the template structure above with opening alert, abbreviations, and CTA ending' : 'Use theme keywords naturally when relevant'}
 - Focus on emotional benefit, quality, and product appeal
-- Optional tagline format: "Poppat Jamals — [quality descriptor]"
-- Avoid excessive focus on brand history or age
 - Prioritize brevity - every word counts!
 - Make the theme clear but don't be heavy-handed
+${theme === 'new-product' ? '- Use abbreviations to save words (w/ = with, & = and, etc.)' : ''}
 
 Output ONLY the script text for voiceover, no explanations.`;
 
